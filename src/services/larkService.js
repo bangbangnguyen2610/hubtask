@@ -9,7 +9,10 @@ export async function getLarkTasks() {
   const data = await response.json();
 
   if (data.success) {
-    return data.tasks;
+    return {
+      tasks: data.tasks,
+      tables: data.tables || [],
+    };
   }
 
   throw new Error(data.error || 'Failed to fetch tasks');

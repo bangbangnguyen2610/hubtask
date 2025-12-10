@@ -9,11 +9,13 @@ import {
   ChevronRight,
   Zap,
   Share2,
+  List,
 } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/tasks', icon: ListTodo, label: 'Tasks' },
+  { to: '/task-lists', icon: List, label: 'Task Lists' },
   { to: '/graph', icon: Share2, label: 'Knowledge Graph' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/integrations', icon: Plug, label: 'Integrations' },

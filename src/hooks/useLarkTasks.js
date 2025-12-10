@@ -16,7 +16,9 @@ export function useLarkTasks() {
     retry: 2,
   });
 
-  const tasks = query.data || [];
+  const data = query.data || {};
+  const tasks = data.tasks || [];
+  const tables = data.tables || [];
   const stats = calculateTaskStats(tasks);
   const projectData = groupTasksByProject(tasks);
   const statusChartData = getStatusChartData(tasks);
@@ -24,6 +26,7 @@ export function useLarkTasks() {
 
   return {
     tasks,
+    tables,
     stats,
     projectData,
     statusChartData,

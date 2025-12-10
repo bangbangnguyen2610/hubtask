@@ -5,8 +5,12 @@ const LARK_CONFIG = {
   appId: 'cli_a9aab0f22978deed',
   appSecret: 'qGF9xiBcIcZrqzpTS8wV3fB7ouywulDV',
   baseId: 'NpFFbydIXaskS8saNt1l6BP1gJf',
-  tableId: 'tbluN453N5fhcNI0',
   baseUrl: 'https://open.larksuite.com/open-apis',
+  tables: [
+    { id: 'tbluN453N5fhcNI0', name: 'Task List 1' },
+    { id: 'tbl5U9O7SDw7YEa0', name: 'Task List 2' },
+    { id: 'tblL1zhrNqW9zM3Q', name: 'Task List 3' },
+  ],
 };
 
 // Get Lark access token
@@ -27,14 +31,14 @@ async function getAccessToken() {
   throw new Error('Failed to get access token');
 }
 
-// Fetch all records from Lark Base
-async function fetchAllRecords(token) {
+// Fetch all records from a specific table
+async function fetchTableRecords(token, tableId) {
   let allItems = [];
   let pageToken = null;
   let hasMore = true;
 
   while (hasMore) {
-    const url = new URL(`${LARK_CONFIG.baseUrl}/bitable/v1/apps/${LARK_CONFIG.baseId}/tables/${LARK_CONFIG.tableId}/records`);
+    const url = new URL(`${LARK_CONFIG.baseUrl}/bitable/v1/apps/${LARK_CONFIG.baseId}/tables/${tableId}/records`);
     url.searchParams.set('page_size', '100');
     if (pageToken) url.searchParams.set('page_token', pageToken);
 
@@ -43,12 +47,12 @@ async function fetchAllRecords(token) {
     });
 
     const data = await response.json();
-    if (data.code === 0) {
+    if (data.code === 0 && data.data?.items) {
       allItems = [...allItems, ...data.data.items];
       hasMore = data.data.has_more;
       pageToken = data.data.page_token;
     } else {
-      throw new Error('Failed to fetch records');
+      hasMore = false;
     }
   }
 
@@ -56,7 +60,7 @@ async function fetchAllRecords(token) {
 }
 
 // Transform Lark record to task format
-function transformTask(record) {
+function transformTask(record, tableId, tableName) {
   const fields = record.fields;
 
   let status = 'pending';
@@ -71,9 +75,9 @@ function transformTask(record) {
   let priority = 'medium';
   const priorityField = fields['Priority'];
   if (priorityField) {
-    if (priorityField.includes('P1') || priorityField.toLowerCase().includes('quan trọng')) {
+    if (priorityField.includes('P1') || priorityField.toLowerCase?.().includes('quan trọng')) {
       priority = 'high';
-    } else if (priorityField.includes('P3') || priorityField.toLowerCase().includes('thấp')) {
+    } else if (priorityField.includes('P3') || priorityField.toLowerCase?.().includes('thấp')) {
       priority = 'low';
     }
   }
@@ -108,13 +112,14 @@ function transformTask(record) {
     subTaskCount: parseInt(fields['Sub-task count']) || 0,
     subTaskProgress: fields['Sub-task progress'],
     module: fields['MODULE'] || [],
-    taskListName: fields['Task list']?.text || '',
+    taskListName: fields['Task list']?.text || tableName,
+    tableId,
+    tableName,
     link: fields['Task title']?.link || '',
   };
 }
 
 export async function onRequest(context) {
-  // CORS headers
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -122,17 +127,44 @@ export async function onRequest(context) {
     'Content-Type': 'application/json',
   };
 
-  // Handle preflight
   if (context.request.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const token = await getAccessToken();
-    const records = await fetchAllRecords(token);
-    const tasks = records.map(transformTask);
+    const url = new URL(context.request.url);
+    const tableIdParam = url.searchParams.get('tableId');
 
-    return new Response(JSON.stringify({ success: true, tasks }), {
+    const token = await getAccessToken();
+
+    let allTasks = [];
+    let tablesToFetch = LARK_CONFIG.tables;
+
+    // If specific tableId requested, only fetch that one
+    if (tableIdParam) {
+      tablesToFetch = LARK_CONFIG.tables.filter(t => t.id === tableIdParam);
+    }
+
+    // Fetch from all tables in parallel
+    const results = await Promise.all(
+      tablesToFetch.map(async (table) => {
+        try {
+          const records = await fetchTableRecords(token, table.id);
+          return records.map(r => transformTask(r, table.id, table.name));
+        } catch (e) {
+          console.error(`Error fetching table ${table.id}:`, e);
+          return [];
+        }
+      })
+    );
+
+    allTasks = results.flat();
+
+    return new Response(JSON.stringify({
+      success: true,
+      tasks: allTasks,
+      tables: LARK_CONFIG.tables,
+    }), {
       headers: corsHeaders,
     });
   } catch (error) {
