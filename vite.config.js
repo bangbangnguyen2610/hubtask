@@ -10,5 +10,12 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    proxy: {
+      '/api': {
+        target: 'https://hubtask.pages.dev',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
 })

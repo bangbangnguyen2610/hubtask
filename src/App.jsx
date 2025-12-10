@@ -7,6 +7,7 @@ import { Tasks } from './pages/Tasks';
 import { Analytics } from './pages/Analytics';
 import { Integrations } from './pages/Integrations';
 import { Settings } from './pages/Settings';
+import { Graph } from './pages/Graph';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -27,6 +28,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/tasks" element={<Tasks />} />
+              <Route path="/graph" element={<Graph />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/integrations" element={<Integrations />} />
               <Route path="/settings" element={<Settings />} />

@@ -98,6 +98,7 @@ function transformTask(record) {
     status,
     priority,
     project: projectName,
+    customGroup: fields['Custom Group'] || null,
     owner: ownerNames,
     ownerAvatars: owners.map(o => o.avatar_url),
     dueDate,
