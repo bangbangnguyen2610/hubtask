@@ -29,18 +29,23 @@ async function getAccessToken() {
 
 // Fetch table metadata (name) from Lark
 async function fetchTableInfo(token, tableId) {
-  const url = `${LARK_CONFIG.baseUrl}/bitable/v1/apps/${LARK_CONFIG.baseId}/tables/${tableId}`;
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const data = await response.json();
-  if (data.code === 0 && data.data?.table) {
-    return {
-      id: tableId,
-      name: data.data.table.name || 'Unnamed Table',
-    };
+  try {
+    const url = `${LARK_CONFIG.baseUrl}/bitable/v1/apps/${LARK_CONFIG.baseId}/tables/${tableId}`;
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const text = await response.text();
+    const data = JSON.parse(text);
+    if (data.code === 0 && data.data?.table) {
+      return {
+        id: tableId,
+        name: data.data.table.name || 'Unnamed Table',
+      };
+    }
+  } catch (e) {
+    console.error(`Error fetching table info for ${tableId}:`, e);
   }
-  return { id: tableId, name: 'Unknown Table' };
+  return { id: tableId, name: `Table ${tableId.slice(-4)}` };
 }
 
 // Fetch all records from a specific table
