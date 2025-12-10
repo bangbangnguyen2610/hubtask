@@ -27,25 +27,26 @@ async function getAccessToken() {
   throw new Error('Failed to get access token');
 }
 
-// Fetch table metadata (name) from Lark
-async function fetchTableInfo(token, tableId) {
+// Fetch all tables metadata from Lark Base
+async function fetchAllTables(token) {
   try {
-    const url = `${LARK_CONFIG.baseUrl}/bitable/v1/apps/${LARK_CONFIG.baseId}/tables/${tableId}`;
+    const url = `${LARK_CONFIG.baseUrl}/bitable/v1/apps/${LARK_CONFIG.baseId}/tables`;
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const text = await response.text();
-    const data = JSON.parse(text);
-    if (data.code === 0 && data.data?.table) {
-      return {
-        id: tableId,
-        name: data.data.table.name || 'Unnamed Table',
-      };
+    const data = await response.json();
+    if (data.code === 0 && data.data?.items) {
+      // Return map of tableId -> name
+      const tableMap = {};
+      data.data.items.forEach(item => {
+        tableMap[item.table_id] = item.name;
+      });
+      return tableMap;
     }
   } catch (e) {
-    console.error(`Error fetching table info for ${tableId}:`, e);
+    console.error('Error fetching tables:', e);
   }
-  return { id: tableId, name: `Table ${tableId.slice(-4)}` };
+  return {};
 }
 
 // Fetch all records from a specific table
@@ -161,23 +162,23 @@ export async function onRequest(context) {
       tableIds = tableIds.filter(id => id === tableIdParam);
     }
 
-    // Fetch table info (names) and records in parallel
-    const tableInfoPromises = tableIds.map(id => fetchTableInfo(token, id));
-    const tables = await Promise.all(tableInfoPromises);
+    // Fetch all tables metadata from Lark Base
+    const tableMap = await fetchAllTables(token);
 
-    // Create a map for quick lookup
-    const tableMap = {};
-    tables.forEach(t => { tableMap[t.id] = t.name; });
+    // Build tables array with real names
+    const tables = tableIds.map(id => ({
+      id,
+      name: tableMap[id] || `Table ${id.slice(-4)}`,
+    }));
 
     // Fetch records from all tables in parallel
     const results = await Promise.all(
-      tableIds.map(async (tableId) => {
+      tables.map(async (table) => {
         try {
-          const records = await fetchTableRecords(token, tableId);
-          const tableName = tableMap[tableId] || 'Unknown';
-          return records.map(r => transformTask(r, tableId, tableName));
+          const records = await fetchTableRecords(token, table.id);
+          return records.map(r => transformTask(r, table.id, table.name));
         } catch (e) {
-          console.error(`Error fetching table ${tableId}:`, e);
+          console.error(`Error fetching table ${table.id}:`, e);
           return [];
         }
       })
