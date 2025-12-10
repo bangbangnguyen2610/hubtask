@@ -6,11 +6,7 @@ const LARK_CONFIG = {
   appSecret: 'qGF9xiBcIcZrqzpTS8wV3fB7ouywulDV',
   baseId: 'NpFFbydIXaskS8saNt1l6BP1gJf',
   baseUrl: 'https://open.larksuite.com/open-apis',
-  tables: [
-    { id: 'tbluN453N5fhcNI0', name: 'Task List 1' },
-    { id: 'tbl5U9O7SDw7YEa0', name: 'Task List 2' },
-    { id: 'tblL1zhrNqW9zM3Q', name: 'Task List 3' },
-  ],
+  tableIds: ['tbluN453N5fhcNI0', 'tbl5U9O7SDw7YEa0', 'tblL1zhrNqW9zM3Q'],
 };
 
 // Get Lark access token
@@ -29,6 +25,22 @@ async function getAccessToken() {
     return data.tenant_access_token;
   }
   throw new Error('Failed to get access token');
+}
+
+// Fetch table metadata (name) from Lark
+async function fetchTableInfo(token, tableId) {
+  const url = `${LARK_CONFIG.baseUrl}/bitable/v1/apps/${LARK_CONFIG.baseId}/tables/${tableId}`;
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (data.code === 0 && data.data?.table) {
+    return {
+      id: tableId,
+      name: data.data.table.name || 'Unnamed Table',
+    };
+  }
+  return { id: tableId, name: 'Unknown Table' };
 }
 
 // Fetch all records from a specific table
@@ -137,33 +149,41 @@ export async function onRequest(context) {
 
     const token = await getAccessToken();
 
-    let allTasks = [];
-    let tablesToFetch = LARK_CONFIG.tables;
+    let tableIds = LARK_CONFIG.tableIds;
 
     // If specific tableId requested, only fetch that one
     if (tableIdParam) {
-      tablesToFetch = LARK_CONFIG.tables.filter(t => t.id === tableIdParam);
+      tableIds = tableIds.filter(id => id === tableIdParam);
     }
 
-    // Fetch from all tables in parallel
+    // Fetch table info (names) and records in parallel
+    const tableInfoPromises = tableIds.map(id => fetchTableInfo(token, id));
+    const tables = await Promise.all(tableInfoPromises);
+
+    // Create a map for quick lookup
+    const tableMap = {};
+    tables.forEach(t => { tableMap[t.id] = t.name; });
+
+    // Fetch records from all tables in parallel
     const results = await Promise.all(
-      tablesToFetch.map(async (table) => {
+      tableIds.map(async (tableId) => {
         try {
-          const records = await fetchTableRecords(token, table.id);
-          return records.map(r => transformTask(r, table.id, table.name));
+          const records = await fetchTableRecords(token, tableId);
+          const tableName = tableMap[tableId] || 'Unknown';
+          return records.map(r => transformTask(r, tableId, tableName));
         } catch (e) {
-          console.error(`Error fetching table ${table.id}:`, e);
+          console.error(`Error fetching table ${tableId}:`, e);
           return [];
         }
       })
     );
 
-    allTasks = results.flat();
+    const allTasks = results.flat();
 
     return new Response(JSON.stringify({
       success: true,
       tasks: allTasks,
-      tables: LARK_CONFIG.tables,
+      tables: tables,
     }), {
       headers: corsHeaders,
     });
