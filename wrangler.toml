@@ -1,0 +1,9 @@
+name = "task-dashboard"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "./dist"
+
+# Uncomment below for Cloudflare Functions (API routes)
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "task-dashboard-db"
+# database_id = "your-database-id"
