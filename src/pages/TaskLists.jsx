@@ -164,7 +164,7 @@ export function TaskLists() {
       {/* Filters */}
       <Card>
         <CardHeader className="pb-4">
-          <CardTitle icon={<Filter size={18} />}>Filters</CardTitle>
+          <CardTitle icon={Filter}>Filters</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
