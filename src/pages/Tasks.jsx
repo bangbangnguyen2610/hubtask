@@ -1,21 +1,9 @@
 import { useState } from 'react';
-import { Plus, Filter, Search } from 'lucide-react';
+import { Plus, Filter, Search, RefreshCw, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { TaskList } from '../components/dashboard/TaskList';
-
-const mockTasks = [
-  { id: 1, title: 'Setup CI/CD pipeline', status: 'completed', priority: 'high', project: 'DevOps', dueDate: 'Dec 8' },
-  { id: 2, title: 'Review PR #234', status: 'in_progress', priority: 'medium', project: 'Frontend', dueDate: 'Dec 10' },
-  { id: 3, title: 'Update documentation', status: 'pending', priority: 'low', project: 'Docs', dueDate: 'Dec 12' },
-  { id: 4, title: 'Fix authentication bug', status: 'overdue', priority: 'high', project: 'Backend', dueDate: 'Dec 5' },
-  { id: 5, title: 'Design new landing page', status: 'in_progress', priority: 'medium', project: 'Design', dueDate: 'Dec 15' },
-  { id: 6, title: 'Implement user notifications', status: 'pending', priority: 'high', project: 'Backend', dueDate: 'Dec 18' },
-  { id: 7, title: 'Write unit tests', status: 'in_progress', priority: 'medium', project: 'QA', dueDate: 'Dec 11' },
-  { id: 8, title: 'Optimize database queries', status: 'pending', priority: 'high', project: 'Backend', dueDate: 'Dec 20' },
-  { id: 9, title: 'Create API documentation', status: 'completed', priority: 'low', project: 'Docs', dueDate: 'Dec 6' },
-  { id: 10, title: 'Setup monitoring alerts', status: 'pending', priority: 'medium', project: 'DevOps', dueDate: 'Dec 22' },
-];
+import { useLarkTasks } from '../hooks/useLarkTasks';
 
 const statusFilters = [
   { label: 'All', value: 'all' },
@@ -26,27 +14,56 @@ const statusFilters = [
 ];
 
 export function Tasks() {
+  const { tasks, isLoading, refetch } = useLarkTasks();
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredTasks = mockTasks.filter((task) => {
+  const filteredTasks = tasks.filter((task) => {
     const matchesFilter = filter === 'all' || task.status === filter;
-    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.project.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch =
+      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.owner.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
   });
+
+  // Sort by created date (newest first)
+  const sortedTasks = [...filteredTasks].sort(
+    (a, b) => (b.createdOn || 0) - (a.createdOn || 0)
+  );
+
+  const handleTaskClick = (task) => {
+    if (task.link) {
+      window.open(task.link, '_blank');
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tasks</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Manage and track your tasks</p>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {isLoading ? 'Loading...' : `${tasks.length} tasks from Lark Base`}
+          </p>
         </div>
-        <Button>
-          <Plus size={20} className="mr-2" />
-          Add Task
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>
+            <RefreshCw size={18} className={`mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Sync
+          </Button>
+          <Button
+            onClick={() =>
+              window.open(
+                'https://gearvn-com.sg.larksuite.com/base/NpFFbydIXaskS8saNt1l6BP1gJf?table=tbluN453N5fhcNI0',
+                '_blank'
+              )
+            }
+          >
+            <ExternalLink size={18} className="mr-2" />
+            Open in Lark
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -58,7 +75,7 @@ export function Tasks() {
               <Search size={18} className="text-gray-400" />
               <input
                 type="text"
-                placeholder="Search tasks..."
+                placeholder="Search tasks, projects, owners..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1 bg-transparent border-none outline-none text-gray-900 dark:text-white placeholder-gray-400"
@@ -66,14 +83,14 @@ export function Tasks() {
             </div>
 
             {/* Status Filter */}
-            <div className="flex items-center gap-2">
-              <Filter size={18} className="text-gray-400" />
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <Filter size={18} className="text-gray-400 flex-shrink-0" />
               <div className="flex gap-1">
                 {statusFilters.map((item) => (
                   <button
                     key={item.value}
                     onClick={() => setFilter(item.value)}
-                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                    className={`px-3 py-1.5 text-sm rounded-lg transition-colors whitespace-nowrap ${
                       filter === item.value
                         ? 'bg-primary-600 text-white'
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -88,10 +105,47 @@ export function Tasks() {
         </CardContent>
       </Card>
 
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {statusFilters.slice(1).map((item) => {
+          const count = tasks.filter((t) => t.status === item.value).length;
+          return (
+            <button
+              key={item.value}
+              onClick={() => setFilter(item.value)}
+              className={`p-4 rounded-xl border transition-all ${
+                filter === item.value
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                  : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300'
+              }`}
+            >
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{count}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{item.label}</p>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Task List */}
       <Card>
         <CardContent>
-          <TaskList tasks={filteredTasks} />
+          {isLoading ? (
+            <div className="py-12 text-center text-gray-400">
+              <RefreshCw size={24} className="animate-spin mx-auto mb-2" />
+              Loading tasks from Lark...
+            </div>
+          ) : sortedTasks.length === 0 ? (
+            <div className="py-12 text-center text-gray-400">
+              No tasks found matching your criteria
+            </div>
+          ) : (
+            <>
+              <div className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+                Showing {sortedTasks.length} of {tasks.length} tasks
+              </div>
+              <TaskList tasks={sortedTasks} onTaskClick={handleTaskClick} />
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
