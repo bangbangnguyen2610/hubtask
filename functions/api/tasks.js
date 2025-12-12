@@ -61,18 +61,17 @@ async function refreshUserAccessToken(refreshToken) {
 }
 
 // Fetch tasks from a tasklist using Lark Task API v2
-async function fetchTasklistTasks(token, tasklistGuid, includeCompleted = true) {
+// Need to fetch both completed and non-completed tasks separately
+async function fetchTasklistTasks(token, tasklistGuid) {
   let allTasks = [];
+
+  // Fetch non-completed tasks (completed=false or not set)
   let pageToken = null;
   let hasMore = true;
 
   while (hasMore) {
     const url = new URL(`${LARK_CONFIG.baseUrl}/task/v2/tasklists/${tasklistGuid}/tasks`);
     url.searchParams.set('page_size', '100');
-    // Include completed tasks
-    if (includeCompleted) {
-      url.searchParams.set('completed', 'true');
-    }
     if (pageToken) url.searchParams.set('page_token', pageToken);
 
     const response = await fetch(url.toString(), {
@@ -85,12 +84,45 @@ async function fetchTasklistTasks(token, tasklistGuid, includeCompleted = true) 
       hasMore = data.data.has_more || false;
       pageToken = data.data.page_token;
     } else {
-      // Return error info for debugging
-      return { error: data, tasks: [] };
+      break;
     }
   }
 
-  return { tasks: allTasks };
+  // Fetch completed tasks separately
+  pageToken = null;
+  hasMore = true;
+
+  while (hasMore) {
+    const url = new URL(`${LARK_CONFIG.baseUrl}/task/v2/tasklists/${tasklistGuid}/tasks`);
+    url.searchParams.set('page_size', '100');
+    url.searchParams.set('completed', 'true');
+    if (pageToken) url.searchParams.set('page_token', pageToken);
+
+    const response = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const data = await response.json();
+    if (data.code === 0 && data.data?.items) {
+      allTasks = [...allTasks, ...data.data.items];
+      hasMore = data.data.has_more || false;
+      pageToken = data.data.page_token;
+    } else {
+      break;
+    }
+  }
+
+  // Remove duplicates (in case API returns same tasks)
+  const uniqueTasks = [];
+  const seenGuids = new Set();
+  for (const task of allTasks) {
+    if (!seenGuids.has(task.guid)) {
+      seenGuids.add(task.guid);
+      uniqueTasks.push(task);
+    }
+  }
+
+  return { tasks: uniqueTasks };
 }
 
 // Fetch comments for a specific task
