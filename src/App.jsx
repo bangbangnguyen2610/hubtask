@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from './context/ThemeContext';
@@ -10,6 +11,7 @@ import { Analytics } from './pages/Analytics';
 import { Integrations } from './pages/Integrations';
 import { Settings } from './pages/Settings';
 import { Graph } from './pages/Graph';
+import { startAutoRefresh, stopAutoRefresh } from './services/taskService';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -22,6 +24,12 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  // Start auto-refresh for OAuth tokens
+  useEffect(() => {
+    startAutoRefresh();
+    return () => stopAutoRefresh();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>

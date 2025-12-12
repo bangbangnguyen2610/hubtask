@@ -43,6 +43,74 @@ export function isTokenExpired(tokens) {
   return Date.now() > expiresAt;
 }
 
+// Check if tokens need refresh (< 30 min remaining)
+export function needsRefresh(tokens) {
+  if (!tokens || !tokens.savedAt || !tokens.expires_in) {
+    return true;
+  }
+  const expiresAt = tokens.savedAt + (tokens.expires_in * 1000);
+  const thirtyMinutes = 30 * 60 * 1000;
+  return Date.now() > (expiresAt - thirtyMinutes);
+}
+
+// Refresh tokens using the refresh_token
+export async function refreshTokens() {
+  const tokens = getStoredTokens();
+  if (!tokens || !tokens.refresh_token) {
+    return null;
+  }
+
+  try {
+    const response = await fetch('/api/oauth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: tokens.refresh_token }),
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      saveTokens({
+        user_access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_in: data.expires_in,
+      });
+      return data;
+    }
+  } catch (e) {
+    console.error('Token refresh failed:', e);
+  }
+  return null;
+}
+
+// Auto-refresh interval (runs every 30 minutes)
+let refreshInterval = null;
+
+export function startAutoRefresh() {
+  if (refreshInterval) return;
+
+  // Check and refresh immediately if needed
+  const tokens = getStoredTokens();
+  if (tokens && needsRefresh(tokens)) {
+    refreshTokens();
+  }
+
+  // Set interval to check every 30 minutes
+  refreshInterval = setInterval(async () => {
+    const currentTokens = getStoredTokens();
+    if (currentTokens && needsRefresh(currentTokens)) {
+      console.log('Auto-refreshing tokens...');
+      await refreshTokens();
+    }
+  }, 30 * 60 * 1000); // 30 minutes
+}
+
+export function stopAutoRefresh() {
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+    refreshInterval = null;
+  }
+}
+
 // Check if user is authenticated
 export function isAuthenticated() {
   const tokens = getStoredTokens();
