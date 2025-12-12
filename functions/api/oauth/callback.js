@@ -8,11 +8,37 @@ const LARK_CONFIG = {
 
 export async function onRequest(context) {
   const url = new URL(context.request.url);
+
+  // Handle Lark URL verification (for registering callback URL)
+  if (context.request.method === 'POST') {
+    try {
+      const body = await context.request.json();
+      // Lark sends a challenge for URL verification
+      if (body.challenge) {
+        return new Response(JSON.stringify({ challenge: body.challenge }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    } catch (e) {
+      // Not a verification request, continue
+    }
+  }
+
+  // Handle GET request for verification ping
+  if (context.request.method === 'GET' && !url.searchParams.get('code')) {
+    return new Response(JSON.stringify({ status: 'ok' }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
 
   if (!code) {
-    return new Response('Missing authorization code', { status: 400 });
+    return new Response(JSON.stringify({ error: 'Missing authorization code' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   try {
