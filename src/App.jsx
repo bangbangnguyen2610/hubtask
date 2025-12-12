@@ -5,6 +5,7 @@ import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Tasks } from './pages/Tasks';
 import { TaskLists } from './pages/TaskLists';
+import { TaskSync } from './pages/TaskSync';
 import { Analytics } from './pages/Analytics';
 import { Integrations } from './pages/Integrations';
 import { Settings } from './pages/Settings';
@@ -30,6 +31,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/task-lists" element={<TaskLists />} />
+              <Route path="/task-sync" element={<TaskSync />} />
               <Route path="/graph" element={<Graph />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/integrations" element={<Integrations />} />

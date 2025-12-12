@@ -10,12 +10,14 @@ import {
   Zap,
   Share2,
   List,
+  CloudDownload,
 } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/tasks', icon: ListTodo, label: 'Tasks' },
   { to: '/task-lists', icon: List, label: 'Task Lists' },
+  { to: '/task-sync', icon: CloudDownload, label: 'Task Sync' },
   { to: '/graph', icon: Share2, label: 'Knowledge Graph' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/integrations', icon: Plug, label: 'Integrations' },
