@@ -68,13 +68,24 @@ async function fetchTaskComments(token, taskGuid) {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    const data = await response.json();
-    if (data.code === 0 && data.data?.items) {
-      allComments = [...allComments, ...data.data.items];
-      hasMore = data.data.has_more || false;
-      pageToken = data.data.page_token;
+    // Get response text first to handle non-JSON responses
+    const responseText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      return { comments: [], error: { message: 'Invalid JSON response', raw: responseText.substring(0, 200) } };
+    }
+
+    if (data.code === 0) {
+      // Success - may have items or empty
+      if (data.data?.items) {
+        allComments = [...allComments, ...data.data.items];
+      }
+      hasMore = data.data?.has_more || false;
+      pageToken = data.data?.page_token;
     } else {
-      // Return error for debugging
+      // API error
       return { comments: [], error: data };
     }
   }
