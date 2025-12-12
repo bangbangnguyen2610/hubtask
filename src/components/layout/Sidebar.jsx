@@ -8,10 +8,12 @@ import {
   Zap,
   Share2,
   Activity,
+  FolderKanban,
 } from 'lucide-react';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/tasks', icon: FolderKanban, label: 'Task Lists' },
   { to: '/activity', icon: Activity, label: 'Activity' },
   { to: '/graph', icon: Share2, label: 'Knowledge Graph' },
   { to: '/integrations', icon: Plug, label: 'Integrations' },
