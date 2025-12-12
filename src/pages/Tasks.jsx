@@ -1,9 +1,12 @@
-import { useState } from 'react';
-import { Filter, Search, RefreshCw, ExternalLink, ListTodo, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Filter, RefreshCw, ExternalLink, ListTodo, CheckCircle2, Clock, AlertTriangle, Database, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { TaskList } from '../components/dashboard/TaskList';
+import { CommentsSidePanel } from '../components/dashboard/CommentsSidePanel';
+import { SearchBar } from '../components/SearchBar';
 import { useLarkTasks } from '../hooks/useLarkTasks';
+import { triggerSync } from '../services/dbService';
 
 const statusFilters = [
   { label: 'All', value: 'all', icon: ListTodo, color: 'primary' },
@@ -23,15 +26,51 @@ const statusColors = {
 export function Tasks() {
   const { tasks, isLoading, refetch } = useLarkTasks();
   const [filter, setFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState(null);
+  const [searchType, setSearchType] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  const filteredTasks = tasks.filter((task) => {
+  // Handle search results from SearchBar
+  const handleSearchResults = useCallback((results, type) => {
+    setSearchResults(results);
+    setSearchType(type);
+  }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchResults(null);
+    setSearchType(null);
+  }, []);
+
+  // Trigger D1 sync
+  const handleSyncToD1 = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await triggerSync('all');
+      console.log('Sync result:', result);
+
+      // Show detailed result
+      const bitableCount = result.results?.bitable?.message || 'Unknown';
+      if (result.success) {
+        alert(`Sync completed!\n\n${bitableCount}`);
+      } else {
+        alert(`Sync partially completed:\n\n${bitableCount}\n\nSome features require OAuth login.`);
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      alert('Sync failed: ' + error.message);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Use search results if available, otherwise use tasks from Lark
+  const displayTasks = searchResults || tasks;
+
+  const filteredTasks = displayTasks.filter((task) => {
     const matchesFilter = filter === 'all' || task.status === filter;
-    const matchesSearch =
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.project.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.owner.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
+    return matchesFilter;
   });
 
   // Sort by created date (newest first)
@@ -40,9 +79,13 @@ export function Tasks() {
   );
 
   const handleTaskClick = (task) => {
-    if (task.link) {
-      window.open(task.link, '_blank');
-    }
+    setSelectedTask(task);
+    setIsPanelOpen(true);
+  };
+
+  const handleClosePanel = () => {
+    setIsPanelOpen(false);
+    setSelectedTask(null);
   };
 
   return (
@@ -61,7 +104,11 @@ export function Tasks() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>
             <RefreshCw size={18} className={`mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Sync
+            Refresh
+          </Button>
+          <Button variant="outline" onClick={handleSyncToD1} disabled={isSyncing}>
+            <Database size={18} className={`mr-2 ${isSyncing ? 'animate-pulse' : ''}`} />
+            Sync to D1
           </Button>
           <Button
             onClick={() =>
@@ -110,24 +157,20 @@ export function Tasks() {
       {/* Search & Filters */}
       <Card>
         <CardContent className="py-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search */}
-            <div className="flex items-center gap-3 flex-1 px-4 py-2.5 bg-surface-100 dark:bg-surface-800 rounded-xl border border-surface-200 dark:border-surface-700 focus-within:ring-2 focus-within:ring-primary-500/20 focus-within:border-primary-500 transition-all">
-              <Search size={18} className="text-surface-400" />
-              <input
-                type="text"
-                placeholder="Search tasks, projects, owners..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent border-none outline-none text-surface-900 dark:text-white placeholder-surface-400 text-sm"
+          <div className="flex flex-col gap-4">
+            {/* AI-Powered Search */}
+            <div className="flex-1">
+              <SearchBar
+                onResults={handleSearchResults}
+                onClear={handleClearSearch}
+                placeholder="Search tasks with AI (semantic search)..."
               />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="text-surface-400 hover:text-surface-600 transition-colors"
-                >
-                  ×
-                </button>
+              {searchResults && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-surface-500">
+                  <Sparkles size={14} className="text-purple-500" />
+                  Found {searchResults.length} results
+                  {searchType === 'semantic' && ' using AI search'}
+                </div>
               )}
             </div>
 
@@ -177,6 +220,13 @@ export function Tasks() {
           )}
         </CardContent>
       </Card>
+
+      {/* Comments Side Panel */}
+      <CommentsSidePanel
+        task={selectedTask}
+        isOpen={isPanelOpen}
+        onClose={handleClosePanel}
+      />
     </div>
   );
 }

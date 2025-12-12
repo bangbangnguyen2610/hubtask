@@ -11,6 +11,7 @@ import {
   Share2,
   List,
   CloudDownload,
+  Activity,
 } from 'lucide-react';
 
 const navItems = [
@@ -18,6 +19,7 @@ const navItems = [
   { to: '/tasks', icon: ListTodo, label: 'Tasks' },
   { to: '/task-lists', icon: List, label: 'Task Lists' },
   { to: '/task-sync', icon: CloudDownload, label: 'Task Sync' },
+  { to: '/activity', icon: Activity, label: 'Activity' },
   { to: '/graph', icon: Share2, label: 'Knowledge Graph' },
   { to: '/analytics', icon: BarChart3, label: 'Analytics' },
   { to: '/integrations', icon: Plug, label: 'Integrations' },

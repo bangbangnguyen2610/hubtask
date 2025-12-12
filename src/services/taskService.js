@@ -117,15 +117,19 @@ export function isAuthenticated() {
   return tokens && tokens.user_access_token;
 }
 
-// Get OAuth login URL
-export function getLoginUrl() {
-  return '/api/oauth/login';
+// Get OAuth login URL with optional redirect
+export function getLoginUrl(redirectAfter) {
+  const redirect = redirectAfter || window.location.pathname;
+  return `/api/oauth/login?redirect=${encodeURIComponent(redirect)}`;
 }
 
 export async function getTasks(options = {}) {
   const tokens = getStoredTokens();
 
   const params = new URLSearchParams();
+  if (options.all) {
+    params.set('all', 'true');
+  }
   if (options.tasklist) {
     params.set('tasklist', options.tasklist);
   }

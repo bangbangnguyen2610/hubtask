@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Tasks } from './pages/Tasks';
 import { TaskLists } from './pages/TaskLists';
 import { TaskSync } from './pages/TaskSync';
+import { Activity } from './pages/Activity';
 import { Analytics } from './pages/Analytics';
 import { Integrations } from './pages/Integrations';
 import { Settings } from './pages/Settings';
@@ -40,6 +41,7 @@ function App() {
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/task-lists" element={<TaskLists />} />
               <Route path="/task-sync" element={<TaskSync />} />
+              <Route path="/activity" element={<Activity />} />
               <Route path="/graph" element={<Graph />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/integrations" element={<Integrations />} />

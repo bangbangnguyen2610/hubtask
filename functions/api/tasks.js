@@ -197,10 +197,14 @@ async function fetchTasklistTasks(token, tasklistGuid) {
 }
 
 // Fetch comments for a specific task
+// API: GET /task/v2/comments?resource_type=task&resource_id={taskGuid}
 async function fetchTaskComments(token, taskGuid) {
   try {
-    const url = new URL(`${LARK_CONFIG.baseUrl}/task/v2/tasks/${taskGuid}/comments`);
+    const url = new URL(`${LARK_CONFIG.baseUrl}/task/v2/comments`);
+    url.searchParams.set('resource_type', 'task');
+    url.searchParams.set('resource_id', taskGuid);
     url.searchParams.set('page_size', '100');
+    url.searchParams.set('user_id_type', 'open_id');
 
     const response = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${token}` },

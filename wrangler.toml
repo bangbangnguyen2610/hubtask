@@ -1,0 +1,20 @@
+# HubTask - Cloudflare Pages Configuration
+name = "hubtask"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "dist"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "hubtask-db"
+database_id = "d85c71e4-0aca-4ef5-94bb-4ee33f3d0484"
+migrations_dir = "migrations"
+
+# Vectorize for semantic search
+[[vectorize]]
+binding = "VECTORIZE"
+index_name = "hubtask-search"
+
+# Workers AI for embeddings
+[ai]
+binding = "AI"

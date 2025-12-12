@@ -80,6 +80,18 @@ export async function onRequest(context) {
 
     const { access_token, refresh_token, expires_in, refresh_expires_in } = tokenData.data;
 
+    // Save tokens to D1 database for server-side sync
+    if (context.env.DB) {
+      const now = Date.now();
+      await context.env.DB.prepare(`
+        INSERT OR REPLACE INTO oauth_tokens (id, user_access_token, refresh_token, expires_in, saved_at, updated_at)
+        VALUES ('default', ?, ?, ?, ?, ?)
+      `).bind(access_token, refresh_token, expires_in, now, now).run();
+    }
+
+    // Get redirect URL from state or default to /activity
+    const redirectUrl = state || '/activity';
+
     // Return HTML page that saves tokens and redirects to app
     const html = `
 <!DOCTYPE html>
@@ -117,7 +129,12 @@ export async function onRequest(context) {
       };
 
       // Save to localStorage for the app to use
-      localStorage.setItem('lark_tokens', JSON.stringify(tokens));
+      localStorage.setItem('lark_tokens', JSON.stringify({
+        user_access_token: tokens.user_access_token,
+        refresh_token: tokens.refresh_token,
+        expires_in: tokens.expires_in,
+        savedAt: Date.now()
+      }));
 
       function copyTokens() {
         const text = JSON.stringify(tokens, null, 2);
@@ -126,10 +143,10 @@ export async function onRequest(context) {
         });
       }
 
-      // Auto redirect after 3 seconds
+      // Auto redirect after 2 seconds
       setTimeout(() => {
-        window.location.href = '/task-sync';
-      }, 5000);
+        window.location.href = '${redirectUrl}';
+      }, 2000);
     </script>
   </div>
 </body>
