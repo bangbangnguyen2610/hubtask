@@ -1,22 +1,45 @@
-import { CheckCircle2, Clock, ListTodo, AlertTriangle, RefreshCw, Target, ArrowUpRight, Sparkles, PieChart, Activity } from 'lucide-react';
+import { CheckCircle2, Clock, ListTodo, AlertTriangle, RefreshCw, Target, Sparkles, PieChart, Activity, Users, FolderKanban } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../components/ui/Card';
 import { StatCard } from '../components/dashboard/StatCard';
 import { TaskList } from '../components/dashboard/TaskList';
 import { ProgressChart } from '../components/charts/ProgressChart';
 import { TimelineChart } from '../components/charts/TimelineChart';
+import { BarChartComponent } from '../components/charts/BarChartComponent';
 import { Button } from '../components/ui/Button';
 import { useLarkTasks } from '../hooks/useLarkTasks';
 
 export function Dashboard() {
-  const { tasks, stats, statusChartData, weeklyData, isLoading, isError, refetch } = useLarkTasks();
+  const { tasks, stats, statusChartData, weeklyData, projectData, isLoading, isError, refetch } = useLarkTasks();
 
   // Get recent tasks (last 5)
   const recentTasks = [...tasks]
     .sort((a, b) => (b.createdOn || 0) - (a.createdOn || 0))
     .slice(0, 5);
 
-  // Get overdue tasks
-  const overdueTasks = tasks.filter(t => t.status === 'overdue').slice(0, 3);
+  // Get unique owners with their task counts
+  const ownerStats = {};
+  tasks.forEach((task) => {
+    if (task.owner) {
+      const owners = task.owner.split(', ');
+      owners.forEach((owner) => {
+        if (!ownerStats[owner]) {
+          ownerStats[owner] = { name: owner, tasks: 0, completed: 0 };
+        }
+        ownerStats[owner].tasks++;
+        if (task.status === 'completed') {
+          ownerStats[owner].completed++;
+        }
+      });
+    }
+  });
+  const teamPerformance = Object.values(ownerStats)
+    .sort((a, b) => b.tasks - a.tasks)
+    .slice(0, 6);
+
+  // Project chart data
+  const projectChartData = projectData
+    .sort((a, b) => b.tasks - a.tasks)
+    .slice(0, 5);
 
   if (isError) {
     return (
@@ -155,7 +178,7 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* Charts Grid - Bento Style */}
+      {/* Charts Grid - Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -196,20 +219,111 @@ export function Dashboard() {
         </Card>
       </div>
 
+      {/* Charts Grid - Row 2: Team & Projects */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle icon={Users}>Team Performance</CardTitle>
+            <CardDescription>Tasks by team member</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="h-64 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-10 h-10 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm text-surface-400">Loading chart...</span>
+                </div>
+              </div>
+            ) : teamPerformance.length > 0 ? (
+              <BarChartComponent data={teamPerformance} />
+            ) : (
+              <div className="h-64 flex items-center justify-center text-surface-400">
+                No owner data available
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle icon={FolderKanban}>Tasks by Project</CardTitle>
+            <CardDescription>Top 5 projects</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="h-64 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-10 h-10 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm text-surface-400">Loading chart...</span>
+                </div>
+              </div>
+            ) : projectChartData.length > 0 ? (
+              <BarChartComponent data={projectChartData} />
+            ) : (
+              <div className="h-64 flex items-center justify-center text-surface-400">
+                No project data available
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Team Leaderboard */}
+      {!isLoading && teamPerformance.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle icon={Users}>Team Leaderboard</CardTitle>
+            <CardDescription>Top performers by completion rate</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {teamPerformance.map((owner, index) => (
+                <div
+                  key={owner.name}
+                  className="flex items-center gap-4 p-3 rounded-lg bg-surface-50 dark:bg-surface-800/50"
+                >
+                  <span className="text-2xl font-bold text-surface-300 dark:text-surface-600 w-8">
+                    #{index + 1}
+                  </span>
+                  <div className="flex-1">
+                    <p className="font-medium text-surface-900 dark:text-white">{owner.name}</p>
+                    <div className="flex gap-4 text-sm text-surface-500 dark:text-surface-400">
+                      <span>{owner.tasks} tasks</span>
+                      <span>{owner.completed} completed</span>
+                      <span>
+                        {owner.tasks > 0
+                          ? Math.round((owner.completed / owner.tasks) * 100)
+                          : 0}
+                        % rate
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-24">
+                    <div className="w-full bg-surface-200 dark:bg-surface-700 rounded-full h-2">
+                      <div
+                        className="bg-emerald-500 h-2 rounded-full transition-all"
+                        style={{
+                          width: `${
+                            owner.tasks > 0
+                              ? Math.round((owner.completed / owner.tasks) * 100)
+                              : 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Recent Tasks */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Recent Tasks</CardTitle>
-            <CardDescription>Latest updates from your team</CardDescription>
-          </div>
-          <a
-            href="/tasks"
-            className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
-          >
-            View all ({tasks.length})
-            <ArrowUpRight size={14} />
-          </a>
+        <CardHeader>
+          <CardTitle>Recent Tasks</CardTitle>
+          <CardDescription>Latest updates from your team ({tasks.length} total)</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
