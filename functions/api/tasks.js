@@ -1,5 +1,5 @@
 // Cloudflare Pages Function - Lark Task API v2 Proxy
-// Fetches tasks directly from Lark Task Lists (not Bitable)
+// Fetches tasks directly from Lark Task Lists using user_access_token
 
 const LARK_CONFIG = {
   appId: 'cli_a9aab0f22978deed',
@@ -10,11 +10,14 @@ const LARK_CONFIG = {
     { guid: '9f97563c-dcdc-4dca-8db5-bea0ae002b08', name: '200Lab x Gearvn' },
     // Add more tasklists here when available
   ],
+  // Store refresh token here (will be updated after OAuth)
+  // You can also pass it via request header
+  refreshToken: null,
 };
 
-// Get Lark tenant access token
-async function getAccessToken() {
-  const response = await fetch(`${LARK_CONFIG.baseUrl}/auth/v3/tenant_access_token/internal`, {
+// Get app_access_token (used for refreshing user token)
+async function getAppAccessToken() {
+  const response = await fetch(`${LARK_CONFIG.baseUrl}/auth/v3/app_access_token/internal`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -25,9 +28,36 @@ async function getAccessToken() {
 
   const data = await response.json();
   if (data.code === 0) {
-    return data.tenant_access_token;
+    return data.app_access_token;
   }
-  throw new Error(`Failed to get access token: ${data.msg}`);
+  throw new Error(`Failed to get app_access_token: ${data.msg}`);
+}
+
+// Refresh user_access_token using refresh_token
+async function refreshUserAccessToken(refreshToken) {
+  const appAccessToken = await getAppAccessToken();
+
+  const response = await fetch(`${LARK_CONFIG.baseUrl}/authen/v1/oidc/refresh_access_token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${appAccessToken}`,
+    },
+    body: JSON.stringify({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+  });
+
+  const data = await response.json();
+  if (data.code === 0) {
+    return {
+      accessToken: data.data.access_token,
+      refreshToken: data.data.refresh_token,
+      expiresIn: data.data.expires_in,
+    };
+  }
+  throw new Error(`Failed to refresh token: ${data.msg}`);
 }
 
 // Fetch tasks from a tasklist using Lark Task API v2
@@ -51,12 +81,12 @@ async function fetchTasklistTasks(token, tasklistGuid) {
       hasMore = data.data.has_more || false;
       pageToken = data.data.page_token;
     } else {
-      console.error(`Error fetching tasklist ${tasklistGuid}:`, data);
-      hasMore = false;
+      // Return error info for debugging
+      return { error: data, tasks: [] };
     }
   }
 
-  return allTasks;
+  return { tasks: allTasks };
 }
 
 // Fetch comments for a specific task
@@ -148,8 +178,8 @@ function transformTask(task, tasklistGuid, tasklistName) {
 export async function onRequest(context) {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Refresh-Token',
     'Content-Type': 'application/json',
   };
 
@@ -162,7 +192,44 @@ export async function onRequest(context) {
     const tasklistGuidParam = url.searchParams.get('tasklist');
     const includeComments = url.searchParams.get('comments') === 'true';
 
-    const token = await getAccessToken();
+    // Get tokens from request headers or query params
+    let userAccessToken = context.request.headers.get('Authorization')?.replace('Bearer ', '');
+    let refreshToken = context.request.headers.get('X-Refresh-Token') || url.searchParams.get('refresh_token');
+
+    // If no access token but has refresh token, try to refresh
+    if (!userAccessToken && refreshToken) {
+      try {
+        const tokens = await refreshUserAccessToken(refreshToken);
+        userAccessToken = tokens.accessToken;
+        // Return new tokens in response headers
+        corsHeaders['X-New-Access-Token'] = tokens.accessToken;
+        corsHeaders['X-New-Refresh-Token'] = tokens.refreshToken;
+      } catch (e) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Token refresh failed: ' + e.message,
+          needsAuth: true,
+          authUrl: '/api/oauth/login',
+        }), {
+          status: 401,
+          headers: corsHeaders,
+        });
+      }
+    }
+
+    // If still no token, return auth needed
+    if (!userAccessToken) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'No access token provided',
+        needsAuth: true,
+        authUrl: '/api/oauth/login',
+        hint: 'Please authorize the app first by visiting /api/oauth/login',
+      }), {
+        status: 401,
+        headers: corsHeaders,
+      });
+    }
 
     let tasklistsToFetch = LARK_CONFIG.tasklists;
 
@@ -175,22 +242,29 @@ export async function onRequest(context) {
     const results = await Promise.all(
       tasklistsToFetch.map(async (tasklist) => {
         try {
-          const tasks = await fetchTasklistTasks(token, tasklist.guid);
-          return tasks.map(t => transformTask(t, tasklist.guid, tasklist.name));
+          const result = await fetchTasklistTasks(userAccessToken, tasklist.guid);
+          if (result.error) {
+            console.error(`Error fetching tasklist ${tasklist.guid}:`, result.error);
+            return { tasks: [], error: result.error };
+          }
+          return {
+            tasks: result.tasks.map(t => transformTask(t, tasklist.guid, tasklist.name)),
+          };
         } catch (e) {
           console.error(`Error fetching tasklist ${tasklist.guid}:`, e);
-          return [];
+          return { tasks: [], error: e.message };
         }
       })
     );
 
-    let allTasks = results.flat();
+    let allTasks = results.flatMap(r => r.tasks);
+    const errors = results.filter(r => r.error).map(r => r.error);
 
     // Optionally fetch comments for each task
     if (includeComments && allTasks.length > 0) {
       const tasksWithComments = await Promise.all(
         allTasks.map(async (task) => {
-          const comments = await fetchTaskComments(token, task.guid);
+          const comments = await fetchTaskComments(userAccessToken, task.guid);
           return { ...task, comments };
         })
       );
@@ -211,6 +285,7 @@ export async function onRequest(context) {
       tasks: allTasks,
       tasklists: tasklistsToFetch,
       stats,
+      errors: errors.length > 0 ? errors : undefined,
     }), {
       headers: corsHeaders,
     });
@@ -218,7 +293,7 @@ export async function onRequest(context) {
     return new Response(JSON.stringify({
       success: false,
       error: error.message,
-      hint: 'Make sure the app has task:tasklist:read permission',
+      hint: 'Make sure you have authorized the app and have valid tokens',
     }), {
       status: 500,
       headers: corsHeaders,
