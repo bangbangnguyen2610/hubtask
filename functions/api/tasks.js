@@ -61,7 +61,7 @@ async function refreshUserAccessToken(refreshToken) {
 }
 
 // Fetch tasks from a tasklist using Lark Task API v2
-async function fetchTasklistTasks(token, tasklistGuid) {
+async function fetchTasklistTasks(token, tasklistGuid, includeCompleted = true) {
   let allTasks = [];
   let pageToken = null;
   let hasMore = true;
@@ -69,6 +69,10 @@ async function fetchTasklistTasks(token, tasklistGuid) {
   while (hasMore) {
     const url = new URL(`${LARK_CONFIG.baseUrl}/task/v2/tasklists/${tasklistGuid}/tasks`);
     url.searchParams.set('page_size', '100');
+    // Include completed tasks
+    if (includeCompleted) {
+      url.searchParams.set('completed', 'true');
+    }
     if (pageToken) url.searchParams.set('page_token', pageToken);
 
     const response = await fetch(url.toString(), {
