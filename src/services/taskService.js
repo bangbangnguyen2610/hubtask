@@ -172,3 +172,52 @@ export function groupTasksByAssignee(tasks) {
   });
   return Object.values(groups);
 }
+
+// Fetch comments for a task by taskId (guid)
+export async function getTaskComments(taskId) {
+  const tokens = getStoredTokens();
+
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  if (tokens) {
+    if (tokens.user_access_token && !isTokenExpired(tokens)) {
+      headers['Authorization'] = `Bearer ${tokens.user_access_token}`;
+    }
+    if (tokens.refresh_token) {
+      headers['X-Refresh-Token'] = tokens.refresh_token;
+    }
+  }
+
+  const response = await fetch(`/api/comments?taskId=${encodeURIComponent(taskId)}`, { headers });
+  const data = await response.json();
+
+  // Check for new tokens in response headers (after refresh)
+  const newAccessToken = response.headers.get('X-New-Access-Token');
+  const newRefreshToken = response.headers.get('X-New-Refresh-Token');
+  if (newAccessToken && newRefreshToken) {
+    saveTokens({
+      user_access_token: newAccessToken,
+      refresh_token: newRefreshToken,
+      expires_in: 7200,
+    });
+  }
+
+  if (data.needsAuth) {
+    return {
+      comments: [],
+      needsAuth: true,
+      authUrl: data.authUrl,
+    };
+  }
+
+  if (data.success) {
+    return {
+      comments: data.comments,
+      total: data.total,
+    };
+  }
+
+  throw new Error(data.error || 'Failed to fetch comments');
+}
